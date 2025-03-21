@@ -1,0 +1,48 @@
+services:
+  fhir:
+    container_name: fhir
+    image: "hapiproject/hapi:latest"
+    ports:
+      - "8080:8080"
+    configs:
+      - source: hapi
+        target: /app/config/application.yaml
+    depends_on:
+      - db
+
+
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: admin
+      POSTGRES_USER: admin
+      POSTGRES_DB: hapi
+      HAPI_FHIR_VERSION: R5
+    volumes:
+      - ./hapi.postgress.data:/var/lib/postgresql/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.4
+    container_name: fhir-keycloak
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/hapi
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8080
+      KC_HTTPS_PORT: 8443
+      KC_HOSTNAME_STRICT: false
+    ports:
+      - "8081:8080"
+      - "8443:8443"
+    command: 
+      - "start-dev"
+    depends_on:
+      - db
+
+configs:
+  hapi:
+     file: ./hapi.application.yaml

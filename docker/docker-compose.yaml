@@ -43,6 +43,20 @@ services:
     depends_on:
       - db
 
+  redis:
+    image: redis:7.0-alpine
+    container_name: fhir-redis
+    command: redis-server --appendonly yes --requirepass admin
+    ports:
+      - "6379:6379"
+
+  eureka-server:
+    image: fhir-eureka-server:latest
+    container_name: fhir-eureka-server
+    ports:
+      - "8761:8761"
+    networks:
+      - fhir-network
 configs:
   hapi:
      file: ./hapi.application.yaml

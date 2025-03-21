@@ -1,0 +1,189 @@
+spring:
+  application:
+    name: fhir-api-gateway
+  cloud:
+    gateway:
+      routes:
+        # Patient Service Routes
+        - id: patient-service
+          uri: lb://patient-service
+          predicates:
+            - Path=/api/patients/**, /api/related-persons/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: patientServiceCircuitBreaker
+                fallbackUri: forward:/fallback/patient
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+
+        # Encounter Service Routes
+        - id: encounter-service
+          uri: lb://encounter-service
+          predicates:
+            - Path=/api/encounters/**, /api/observations/**, /api/diagnostics/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: encounterServiceCircuitBreaker
+                fallbackUri: forward:/fallback/encounter
+
+        # Appointment Service Routes
+        - id: appointment-service
+          uri: lb://appointment-service
+          predicates:
+            - Path=/api/appointments/**, /api/schedules/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: appointmentServiceCircuitBreaker
+                fallbackUri: forward:/fallback/appointment
+
+        # Reporting Service Routes
+        - id: reporting-service
+          uri: lb://reporting-service
+          predicates:
+            - Path=/api/reports/**, /api/measures/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: reportingServiceCircuitBreaker
+                fallbackUri: forward:/fallback/reporting
+
+        # FHIR Server Direct Access (secured with special permissions)
+        - id: fhir-server
+          uri: ${app.fhir-server-url}
+          predicates:
+            - Path=/fhir/**
+          filters:
+            - name: Authorization
+              args:
+                authorities: ROLE_FHIR_ADMIN
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+
+        # Community Service Routes
+        - id: community-service
+          uri: lb://community-service
+          predicates:
+            - Path=/api/community/**, /api/groups/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: communityServiceCircuitBreaker
+                fallbackUri: forward:/fallback/community
+
+        # Medication Service Routes
+        - id: medication-service
+          uri: lb://medication-service
+          predicates:
+            - Path=/api/medications/**, /api/prescriptions/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: medicationServiceCircuitBreaker
+                fallbackUri: forward:/fallback/medication
+
+        # Notification Service Routes
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: notificationServiceCircuitBreaker
+                fallbackUri: forward:/fallback/notification
+
+        # Integration Service Routes (HIS connection)
+        - id: integration-service
+          uri: lb://integration-service
+          predicates:
+            - Path=/api/integration/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: integrationServiceCircuitBreaker
+                fallbackUri: forward:/fallback/integration
+
+        # Frontend routes - React App
+        - id: frontend
+          uri: ${app.frontend-url}
+          predicates:
+            - Path=/**
+          filters:
+            - name: StripPrefix
+              args:
+                parts: 0
+
+  # Redis Configuration for Rate Limiting
+  security:
+    oauth2:
+          resource-server:
+            jwt:
+              issuer-uri: ${KEYCLOAK_URL:http://localhost:8081}/realms/fhir-realm
+              jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8081}/realms/fhir-realm/protocol/openid-connect/certs
+  data:
+    redis:
+      port: ${REDIS_PORT:6379}
+      host: ${REDIS_HOST:localhost}
+
+# Service Discovery
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_HOST:localhost}:${EUREKA_PORT:8761}/eureka/
+  instance:
+    prefer-ip-address: true
+
+# Security Configuration
+
+# Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10000
+        permittedNumberOfCallsInHalfOpenState: 5
+    instances:
+      patientServiceCircuitBreaker:
+        baseConfig: default
+      encounterServiceCircuitBreaker:
+        baseConfig: default
+      appointmentServiceCircuitBreaker:
+        baseConfig: default
+      reportingServiceCircuitBreaker:
+        baseConfig: default
+      communityServiceCircuitBreaker:
+        baseConfig: default
+      medicationServiceCircuitBreaker:
+        baseConfig: default
+      notificationServiceCircuitBreaker:
+        baseConfig: default
+      integrationServiceCircuitBreaker:
+        baseConfig: default
+
+# Actuator Configuration for Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+# Application specific properties
+app:
+  fhir-server-url: ${FHIR_SERVER_URL:http://localhost:8000}
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}

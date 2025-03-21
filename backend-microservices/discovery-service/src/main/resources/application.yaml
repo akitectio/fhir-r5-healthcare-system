@@ -1,0 +1,53 @@
+server:
+  port: 8761
+
+spring:
+  application:
+    name: discovery-service
+  security:
+    user:
+      name: ${EUREKA_USERNAME:admin}
+      password: ${EUREKA_PASSWORD:admin}
+
+# C?u hình Eureka Server
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    registerWithEureka: false
+    fetchRegistry: false
+    serviceUrl:
+      defaultZone: http://${spring.security.user.name}:${spring.security.user.password}@${eureka.instance.hostname}:${server.port}/eureka/
+  server:
+    enableSelfPreservation: false
+    waitTimeInMsWhenSyncEmpty: 0
+
+# C?u hình cho production
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+eureka:
+  instance:
+    preferIpAddress: true
+  server:
+    enableSelfPreservation: true
+
+# C?u hình monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+      roles: ADMIN
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  prometheus:
+    metrics:
+      export:
+        enabled: true
